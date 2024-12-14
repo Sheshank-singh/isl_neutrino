@@ -153,19 +153,3 @@ def convert(gesture_folder, target_folder):
 
     os.chdir(rootPath)
     
-    
-if __name__ == "__main__":
-
-    gesture_folder = '/Users/shriya/Documents/GitHub/isl_neutrino/gesture_folder/gesture1/newvideo.mov'  # Single video
-    target_folder = '/Users/shriya/Documents/GitHub/isl_neutrino/target_folder'
-
-    if not os.path.exists(gesture_folder):
-        print(f"Error: Gesture folder '{gesture_folder}' does not exist.")
-        exit(1)
-
-    if not os.path.exists(target_folder):
-        print(f"Creating target folder '{target_folder}'...")
-        os.makedirs(target_folder)
-
-    convert(gesture_folder, target_folder)
-   
