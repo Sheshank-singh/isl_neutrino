@@ -1,55 +1,91 @@
+import cv2
+import os
+import mediapipe as mp
+import numpy as np
 from PIL import Image
 import glob
+from tqdm import tqdm
+import random
+import tensorflow as tf
+
+import cv2
 import os
+import mediapipe as mp
+import numpy as np
+from PIL import Image
+import glob
+from tqdm import tqdm
+import random
 
-# new folder path (may need to alter for Windows OS)
-# change path to your path
-ORI_PATH = 'D:/AIPROJECTISL/train_frames/'
-NEW_SIZE = 224
-PATH = 'D:/AIPROJECTISL/train_frames_rs'  # the path where to save resized images
-ORI_PATH2 = 'D:/AIPROJECTISL/test_frames/'
-PATH2 = 'D:/AIPROJECTISL/test_frames_rs'
-# create new folder
-if not os.path.exists(PATH):
-    os.makedirs(PATH)
+# Augmentation Functions
+def brightness(frame, factor_range=(0.85, 1.15)):
+    factor = np.random.uniform(factor_range[0], factor_range[1])
+    return cv2.convertScaleAbs(frame, alpha=factor, beta=0)
 
-# loop over existing images and resize
-# change path to your path
-for filename in glob.glob(ORI_PATH + '**/*.jpeg'):  # path of raw images with is subdirectory
-    img = Image.open(filename).resize((NEW_SIZE, NEW_SIZE))
+def contrast(frame, factor_range=(0.85, 1.15)):
+    factor = np.random.uniform(factor_range[0], factor_range[1])
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    hsv[..., 2] = np.clip(hsv[..., 2] * factor, 0, 255)
+    return cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
 
-    # get the original location and find its subdir
-    loc = os.path.split(filename)[0]
-    subdir = loc.split('\\')[1]
+def noise(frame, noise_level=25, d=9, sigma_color=75, sigma_space=75):
+    noise = np.random.normal(0, noise_level, frame.shape).astype(np.uint8)
+    noisy_frame = cv2.add(frame, noise)
+    return cv2.bilateralFilter(noisy_frame, d, sigma_color, sigma_space)
 
-    # assembly with its full new directory
-    fullnew_subdir = PATH + "/" + subdir
-    name = os.path.split(filename)[1]
+def augment_frame(frame):
+    augmentations = [brightness, contrast, noise]
+    num_augmentations = random.randint(2, 4)  # Apply 2 to 4 augmentations
+    chosen_augmentations = random.sample(augmentations, num_augmentations)
 
-    # check if the subdir is already created or not
-    if not os.path.exists(fullnew_subdir):
-        os.makedirs(fullnew_subdir)
+    augmented_frame = frame
+    for augmentation in chosen_augmentations:
+        augmented_frame = augmentation(augmented_frame)
 
-    # save resized images to new folder with existing filename
-    img.save('{}{}{}'.format(fullnew_subdir, '/', name))
+    return augmented_frame
 
-if not os.path.exists(PATH2):
-    os.makedirs(PATH2)
+# Function to resize and augment frames, then save
+def resize_and_augment_frames(input_path, output_path, size=224):
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
 
-for filename in glob.glob(ORI_PATH2 + '**/*.jpeg'):  # path of raw images with is subdirectory
-    img = Image.open(filename).resize((NEW_SIZE, NEW_SIZE))
+    for filename in glob.glob(input_path + '**/*.jpeg', recursive=True):
+        img = Image.open(filename)  # Open image
+        img_resized = img.resize((size, size))  # Resize the image to desired size
+        
+        # Convert to NumPy array for augmentation
+        img_np = np.array(img_resized)
+        
+        # Apply augmentations
+        augmented_img_np = augment_frame(img_np)
+        
+        # Convert back to PIL Image after augmentation
+        augmented_img = Image.fromarray(augmented_img_np)
 
-    # get the original location and find its subdir
-    loc = os.path.split(filename)[0]
-    subdir = loc.split('\\')[1]
+        # Create subdirectory if needed
+        loc = os.path.split(filename)[0]
+        subdir = loc.split('/')[-1]  # Get subdirectory name
+        fullnew_subdir = os.path.join(output_path, subdir)
+        if not os.path.exists(fullnew_subdir):
+            os.makedirs(fullnew_subdir)
 
-    # assembly with its full new directory
-    fullnew_subdir = PATH2 + "/" + subdir
-    name = os.path.split(filename)[1]
+        # Save the augmented and resized frame
+        name = os.path.split(filename)[1]
+        augmented_img.save(os.path.join(fullnew_subdir, name))
 
-    # check if the subdir is already created or not
-    if not os.path.exists(fullnew_subdir):
-        os.makedirs(fullnew_subdir)
 
-    # save resized images to new folder with existing filename
-    img.save('{}{}{}'.format(fullnew_subdir, '/', name))
+# Holistic landmark processing function
+def process_with_holistic_landmarks(frame, holistic_model, mp_drawing, mp_holistic):
+    image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    results = holistic_model.process(image_rgb)
+
+    if results.pose_landmarks:
+        mp_drawing.draw_landmarks(frame, results.pose_landmarks, mp_holistic.POSE_CONNECTIONS)
+    if results.face_landmarks:
+        mp_drawing.draw_landmarks(frame, results.face_landmarks, mp_holistic.FACEMESH_CONTOURS)
+    if results.left_hand_landmarks:
+        mp_drawing.draw_landmarks(frame, results.left_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
+    if results.right_hand_landmarks:
+        mp_drawing.draw_landmarks(frame, results.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
+
+    return frame
