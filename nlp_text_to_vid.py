@@ -1,61 +1,37 @@
 import spacy
-import speech_recognition as sr
+import pandas as pd
 
 class TextToISL:
     def __init__(self):
         self.nlp = spacy.load("en_core_web_md")
-        self.recognizer = sr.Recognizer()
 
-    def get_user_input(self):
-        print("Choose an input method:")
-        print("1. Text")
-        print("2. Live Audio")
-        print("3. Audio File")
-        choice = input("Enter 1 for Text, 2 for Live Audio, or 3 for Audio File: ")
+    def process_text_from_dataset(self, dataset_path):
+        # Read the dataset from a CSV file
+        try:
+            df = pd.read_csv(dataset_path)
+        except FileNotFoundError:
+            print(f"Dataset file not found: {dataset_path}")
+            return
 
-        if choice == "1":
-            # Text Input
-            inp_sent = input("Enter your text: ")
-            return inp_sent
+        # Check if 'text' column exists in the dataset
+        if 'text' not in df.columns:
+            print("Dataset must have a 'text' column.")
+            return
 
-        elif choice == "2":
-            # Live Audio Input
-            with sr.Microphone() as source:
-                print("Listening... Speak into the microphone.")
-                try:
-                    audio = self.recognizer.listen(source, timeout=5)
-                    inp_sent = self.recognizer.recognize_google(audio)
-                    print(f"Live Audio Input Recognized as: {inp_sent}")
-                    return inp_sent
-                except sr.UnknownValueError:
-                    print("Sorry, could not understand the audio.")
-                    return None
-                except sr.RequestError as e:
-                    print(f"API error: {e}")
-                    return None
-
-        elif choice == "3":
-            # Audio File Input
-            audio_file = input("Enter the path to your audio file: ")
-            try:
-                with sr.AudioFile(audio_file) as source:
-                    audio = self.recognizer.record(source)
-                inp_sent = self.recognizer.recognize_google(audio)
-                print(f"Audio File Recognized as: {inp_sent}")
-                return inp_sent
-            except sr.UnknownValueError:
-                print("Sorry, I couldn't understand the audio.")
-                return None
-            except sr.RequestError:
-                print("Speech Recognition service is unavailable.")
-                return None
-            except FileNotFoundError:
-                print(f"Audio file not found: {audio_file}")
-                return None
-        else:
-            print("Invalid choice. Please enter 1, 2, or 3.")
-            return None
-
+        for idx, row in df.iterrows():
+            inp_sent = row['text']
+            print(f"Processing sentence {idx + 1}: {inp_sent}")
+            
+            # Process the text as per the existing methods
+            lowercased_text = self.lower_case(inp_sent)
+            print(f"Lowercased Text: {lowercased_text}")
+            
+            print(f"Tokens: {self.tokenize(lowercased_text)}")
+            print(f"POS Tags: {self.POS(lowercased_text)}")
+            
+            isl_sentence = self.convert_to_isl(lowercased_text)
+            print(f"ISL Sentence: {isl_sentence}\n")
+    
     def lower_case(self, text):
         return text.lower()
 
@@ -134,17 +110,31 @@ class TextToISL:
 
         return " ".join(isl_sentence)
 
-    def process_text(self):
-        inp_sent = self.get_user_input()
+import pickle
 
-        if inp_sent:
-            lowercased_text = self.lower_case(inp_sent)
-            print("Lowercased Text:", lowercased_text)
-            print("Tokens:", self.tokenize(lowercased_text))
-            print("POS Tags:", self.POS(lowercased_text))
-            isl_sentence = self.convert_to_isl(lowercased_text)
-            print("ISL Sentence:", isl_sentence)
+# Save the model to a .pkl file
+def save_model(model, filename):
+    with open(filename, 'wb') as file:
+        pickle.dump(model, file)
+    print(f"Model saved to {filename}")
 
 if __name__ == "__main__":
     text_to_ISL = TextToISL()
-    text_to_ISL.process_text()
+    # Save the model as 'text_to_isl_model.pkl'
+    save_model(text_to_ISL, 'text_to_isl_model.pkl')
+    # Now you can process the dataset or perform other operations
+    text_to_ISL.process_text_from_dataset("your_dataset.csv")
+
+
+# Load the model from the .pkl file
+def load_model(filename):
+    with open(filename, 'rb') as file:
+        model = pickle.load(file)
+    return model
+
+# Example usage
+if __name__ == "__main__":
+    # Load the saved model
+    text_to_ISL = load_model('text_to_isl_model.pkl')
+    # Use the loaded model to process the dataset
+    text_to_ISL.process_text_from_dataset("your_dataset.csv")
